@@ -240,6 +240,85 @@ tbody tr:hover:not(.row-group):not(.row-total):not(.row-sub) td { background: va
   .charts-row { grid-template-columns: 1fr; }
   #app { padding: 0 14px 30px; }
 }
+
+/* ── Editor de posiciones ── */
+#editor-backdrop {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.35); z-index: 299;
+}
+#editor-backdrop.open { display: block; }
+.editor-panel {
+  position: fixed; top: 0; right: 0;
+  width: min(560px, 100vw); height: 100vh;
+  background: var(--surface); border-left: 1px solid var(--border2);
+  z-index: 300; transform: translateX(100%);
+  transition: transform 0.25s ease;
+  display: flex; flex-direction: column;
+  box-shadow: -8px 0 32px rgba(0,0,0,0.08);
+}
+.editor-panel.open { transform: translateX(0); }
+.ep-header {
+  padding: 14px 18px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.ep-header h2 { font-size: 0.9rem; font-weight: 600; }
+.ep-header-actions { display: flex; gap: 8px; align-items: center; }
+.ep-tabs { display: flex; border-bottom: 1px solid var(--border); padding: 0 16px; }
+.ep-tab {
+  padding: 8px 16px; font-size: 12px; font-weight: 500; color: var(--muted);
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  cursor: pointer; transition: color .15s; user-select: none;
+}
+.ep-tab:hover { color: var(--text); }
+.ep-tab.active { color: var(--text); border-bottom-color: var(--accent); }
+.ep-body { flex: 1; overflow-y: auto; padding: 14px 16px; }
+.ep-table { width: 100%; border-collapse: collapse; font-size: 11.5px; margin-bottom: 10px; }
+.ep-table th {
+  text-align: left; font-size: 9.5px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .04em; color: var(--muted); padding: 4px 5px;
+  border-bottom: 1px solid var(--border);
+}
+.ep-table td { padding: 3px 3px; vertical-align: middle; }
+.ep-table tbody tr:hover td { background: var(--row-hover); }
+.ep-input {
+  width: 100%; padding: 4px 6px;
+  background: var(--bg); border: 1px solid var(--border2);
+  border-radius: 5px; color: var(--text); font-size: 11.5px;
+  font-family: var(--font); outline: none; transition: border-color .15s;
+}
+.ep-input:focus { border-color: var(--accent); background: var(--surface); }
+.ep-input[type="number"] { text-align: right; }
+.ep-del {
+  background: none; border: none; color: var(--faint); cursor: pointer;
+  font-size: 13px; padding: 2px 5px; border-radius: 4px; line-height: 1;
+  transition: color .15s, background .15s;
+}
+.ep-del:hover { color: var(--red); background: var(--red-bg); }
+.ep-add {
+  width: 100%; padding: 7px; background: var(--bg);
+  border: 1px dashed var(--border2); border-radius: 8px;
+  color: var(--muted); font-size: 12px; cursor: pointer;
+  transition: border-color .15s, color .15s; margin-top: 4px;
+}
+.ep-add:hover { border-color: var(--accent); color: var(--accent); }
+.ep-notice {
+  margin-top: 12px; padding: 9px 11px;
+  background: #fefce8; border: 1px solid #fde047; border-radius: 7px;
+  font-size: 11px; color: #854d0e; line-height: 1.55;
+}
+.ep-notice code { font-size: 10.5px; background: rgba(0,0,0,0.06); padding: 1px 4px; border-radius: 3px; }
+.ep-footer {
+  padding: 11px 16px; border-top: 1px solid var(--border);
+  display: flex; gap: 8px; justify-content: flex-end; align-items: center;
+}
+.ep-btn {
+  padding: 6px 15px; border-radius: 7px; font-size: 12px;
+  font-weight: 600; font-family: var(--font); cursor: pointer; transition: background .15s;
+}
+.ep-btn-ghost { background: none; border: 1px solid var(--border2); color: var(--muted); }
+.ep-btn-ghost:hover { background: var(--bg); color: var(--text); }
+.ep-btn-primary { background: var(--accent); border: 1px solid var(--accent); color: #fff; }
+.ep-btn-primary:hover { background: #4f52d0; }
 </style>
 </head>
 <body>
@@ -261,6 +340,10 @@ tbody tr:hover:not(.row-group):not(.row-total):not(.row-sub) td { background: va
         <div class="hdr-title" id="hdr-title">Mi Portafolio de Inversión</div>
         <div class="hdr-right">
           <div class="hdr-meta" id="hdr-meta">—</div>
+          <button id="edit-btn" onclick="openEditor()" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:500;font-family:var(--font);padding:5px 12px;border-radius:7px;border:.5px solid var(--border2);background:var(--surface);color:var(--muted);cursor:pointer;transition:background .15s,color .15s;white-space:nowrap">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            Editar posiciones
+          </button>
           <button id="refresh-btn" onclick="init(true)">
             <span class="btn-icon" id="btn-icon"><svg id="btn-svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></span>
             <span id="btn-label">Actualizar</span>
@@ -416,6 +499,28 @@ tbody tr:hover:not(.row-group):not(.row-total):not(.row-sub) td { background: va
     </div>
 
   </div><!-- /dashboard -->
+
+  <!-- ══ EDITOR DE POSICIONES ══ -->
+  <div id="editor-backdrop" onclick="closeEditor()"></div>
+  <div class="editor-panel" id="editor-panel">
+    <div class="ep-header">
+      <h2>Editar Posiciones</h2>
+      <div class="ep-header-actions">
+        <button class="ep-btn ep-btn-ghost" onclick="resetPositions()">Restablecer</button>
+        <button class="ep-btn ep-btn-primary" onclick="savePositions()">Guardar y actualizar</button>
+        <button onclick="closeEditor()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:3px 8px;border-radius:6px;line-height:1">✕</button>
+      </div>
+    </div>
+    <div class="ep-tabs">
+      <div class="ep-tab active" onclick="switchETab('usd')">📈 USD</div>
+      <div class="ep-tab"       onclick="switchETab('mxn')">💱 MXN / SIC</div>
+    </div>
+    <div class="ep-body">
+      <div id="ep-usd"></div>
+      <div id="ep-mxn" style="display:none"></div>
+    </div>
+  </div>
+
 </div><!-- /app -->
 
 <script>
@@ -1392,6 +1497,128 @@ async function init(force = false) {
   }
 }
 
+/* ═══════════════════════════════════════════════
+   EDITOR DE POSICIONES
+   ═══════════════════════════════════════════════ */
+const POS_KEY = 'pf_posiciones';
+
+function loadPositions() {
+  const saved = Store.get(POS_KEY);
+  if (saved?.usd?.length) CONFIG.posiciones_usd = saved.usd;
+  if (saved?.mxn?.length !== undefined) CONFIG.posiciones_mxn = saved.mxn;
+}
+
+function openEditor() {
+  renderEPane('usd');
+  renderEPane('mxn');
+  document.getElementById('editor-panel').classList.add('open');
+  document.getElementById('editor-backdrop').classList.add('open');
+}
+
+function closeEditor() {
+  document.getElementById('editor-panel').classList.remove('open');
+  document.getElementById('editor-backdrop').classList.remove('open');
+}
+
+function switchETab(tab) {
+  document.querySelectorAll('.ep-tab').forEach((t, i) =>
+    t.classList.toggle('active', ['usd','mxn'][i] === tab));
+  document.getElementById('ep-usd').style.display = tab === 'usd' ? '' : 'none';
+  document.getElementById('ep-mxn').style.display = tab === 'mxn' ? '' : 'none';
+}
+
+function renderEPane(which) {
+  const isMxn = which === 'mxn';
+  const rows   = isMxn ? CONFIG.posiciones_mxn : CONFIG.posiciones_usd;
+  const pLabel = isMxn ? 'P. MXN' : 'P. USD';
+  const cLabel = isMxn ? 'Costo MXN' : 'Monto USD';
+  const el = document.getElementById('ep-' + which);
+  el.innerHTML = `
+    <table class="ep-table">
+      <thead><tr>
+        <th style="width:62px">Ticker</th>
+        <th>Nombre</th>
+        <th style="width:50px">Títulos</th>
+        <th style="width:60px">${pLabel}</th>
+        <th style="width:68px">${cLabel}</th>
+        ${isMxn ? '<th style="width:32px;text-align:center">SIC</th>' : ''}
+        <th style="width:20px"></th>
+      </tr></thead>
+      <tbody id="ep-${which}-body"></tbody>
+    </table>
+    <button class="ep-add" onclick="addERow('${which}')">+ Agregar posición</button>
+    <div class="ep-notice">
+      Los cambios se guardan en este navegador al hacer clic en <strong>Guardar y actualizar</strong>.<br>
+      Si agregas nuevos tickers, actualiza también <code>tickers.json</code> en el repo para que GitHub Actions los incluya en los precios en vivo.
+    </div>`;
+  const tbody = document.getElementById(`ep-${which}-body`);
+  rows.forEach((r, i) => tbody.appendChild(makeERow(which, r, i)));
+}
+
+function makeERow(which, r, idx) {
+  const isMxn = which === 'mxn';
+  const mntVal = isMxn ? (r.cM ?? r.s * r.pE) : r.mnt;
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input class="ep-input" style="width:58px;text-transform:uppercase" value="${r.t}" data-f="t"></td>
+    <td><input class="ep-input" value="${r.n}" data-f="n"></td>
+    <td><input class="ep-input" type="number" min="0" step="any" value="${r.s}" data-f="s" oninput="syncMnt(this)"></td>
+    <td><input class="ep-input" type="number" min="0" step="any" value="${r.pE}" data-f="pE" oninput="syncMnt(this)"></td>
+    <td><input class="ep-input" type="number" min="0" step="any" value="${(+mntVal||0).toFixed(2)}" data-f="${isMxn?'cM':'mnt'}"></td>
+    ${isMxn ? `<td style="text-align:center"><input type="checkbox" data-f="sic_usd" ${r.sic_usd?'checked':''} style="cursor:pointer;width:14px;height:14px"></td>` : ''}
+    <td><button class="ep-del" onclick="this.closest('tr').remove()">✕</button></td>`;
+  return tr;
+}
+
+function syncMnt(input) {
+  const tr  = input.closest('tr');
+  const s   = parseFloat(tr.querySelector('[data-f="s"]')?.value)  || 0;
+  const pE  = parseFloat(tr.querySelector('[data-f="pE"]')?.value) || 0;
+  const mnt = tr.querySelector('[data-f="mnt"]') || tr.querySelector('[data-f="cM"]');
+  if (mnt && document.activeElement !== mnt) mnt.value = (s * pE).toFixed(2);
+}
+
+function addERow(which) {
+  const tbody = document.getElementById(`ep-${which}-body`);
+  const empty = which === 'usd'
+    ? { t:'', n:'', s:0, pE:0, mnt:0 }
+    : { t:'', n:'', s:0, pE:0, cM:0, sic_usd:false };
+  const row = makeERow(which, empty, tbody.children.length);
+  tbody.appendChild(row);
+  row.querySelector('.ep-input').focus();
+}
+
+function collectERows(which) {
+  const isMxn = which === 'mxn';
+  return [...document.querySelectorAll(`#ep-${which}-body tr`)].flatMap(tr => {
+    const v  = f => { const el=tr.querySelector(`[data-f="${f}"]`); if(!el) return undefined; if(el.type==='checkbox') return el.checked; if(el.type==='number') return parseFloat(el.value)||0; return el.value.trim(); };
+    const tk = v('t')?.toUpperCase();
+    if (!tk) return [];
+    return isMxn
+      ? [{ t:tk, n:v('n'), s:v('s'), pE:v('pE'), cM:v('cM'), sic_usd:v('sic_usd')||false }]
+      : [{ t:tk, n:v('n'), s:v('s'), pE:v('pE'), mnt:v('mnt') }];
+  });
+}
+
+function savePositions() {
+  const usd = collectERows('usd');
+  const mxn = collectERows('mxn');
+  Store.set(POS_KEY, { usd, mxn });
+  CONFIG.posiciones_usd = usd;
+  CONFIG.posiciones_mxn = mxn;
+  closeEditor();
+  const cached = Store.get('pf_v2_data');
+  if (cached) renderDashboard(cached.precios, cached.tc, cached.fecha);
+  else init(true);
+}
+
+function resetPositions() {
+  if (!confirm('¿Restablecer las posiciones al estado original del código fuente?')) return;
+  Store.set(POS_KEY, null);
+  location.reload();
+}
+
+loadPositions();
 init();
 </script>
 </body>
