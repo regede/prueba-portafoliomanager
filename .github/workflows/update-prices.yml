@@ -2,9 +2,9 @@ name: Update Stock Prices
 
 on:
   schedule:
-    # Cada 15 min, lunes-viernes, 13:00-21:00 UTC (cubre NYSE 9:30am-4pm ET en EST y EDT)
-    - cron: '*/15 13-21 * * 1-5'
-  workflow_dispatch: # Permite correr manualmente desde GitHub
+    # Cada 15 min, lunes-viernes, 14:00-21:00 UTC (NYSE: 9:30am-4pm ET en EST y EDT)
+    - cron: '*/15 14-21 * * 1-5'
+  workflow_dispatch: # Correr manualmente desde GitHub Actions
 
 jobs:
   update-prices:
@@ -24,9 +24,20 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Fetch prices
+        id: fetch
         run: python scripts/fetch_prices.py
+        continue-on-error: true   # Rate limit temporal no marca el job como rojo
 
-      - name: Commit and push if changed
+      - name: Log resultado
+        run: |
+          if [ "${{ steps.fetch.outcome }}" = "failure" ]; then
+            echo "⚠️ fetch_prices.py salió con error — prices.json sin cambios"
+          else
+            echo "✅ Precios actualizados correctamente"
+          fi
+
+      - name: Commit y push si hubo cambios
+        if: steps.fetch.outcome == 'success'
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
