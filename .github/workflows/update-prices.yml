@@ -25,16 +25,9 @@ jobs:
 
       - name: Fetch prices
         id: fetch
+        env:
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
         run: python scripts/fetch_prices.py
-        continue-on-error: true   # Rate limit temporal no marca el job como rojo
-
-      - name: Log resultado
-        run: |
-          if [ "${{ steps.fetch.outcome }}" = "failure" ]; then
-            echo "⚠️ fetch_prices.py salió con error — prices.json sin cambios"
-          else
-            echo "✅ Precios actualizados correctamente"
-          fi
 
       - name: Commit y push si hubo cambios
         if: steps.fetch.outcome == 'success'
