@@ -11,7 +11,7 @@ import json
 import sys
 import time
 from pathlib import Path
-from datetime import date
+from datetime import date, datetime, timezone
 
 import pandas as pd
 import yfinance as yf
@@ -148,9 +148,14 @@ def main():
                 precios[t] = existing["precios"][t]
                 print(f"[fetch_prices] {t}: usando precio anterior ({precios[t]})")
 
-    output = {"precios": precios, "tc": tc, "fecha": str(date.today())}
+    output = {
+        "precios":    precios,
+        "tc":         tc,
+        "fecha":      str(date.today()),
+        "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
     PRICES_FILE.write_text(json.dumps(output, indent=2))
-    print(f"[fetch_prices] ✓ Guardados {len(precios)} precios, T/C={tc}, fecha={output['fecha']}")
+    print(f"[fetch_prices] ✓ Guardados {len(precios)} precios, T/C={tc}, fecha={output['fecha']}, updated_at={output['updated_at']}")
 
 
 if __name__ == "__main__":

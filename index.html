@@ -241,6 +241,17 @@ tbody tr:hover:not(.row-group):not(.row-total):not(.row-sub) td { background: va
   #app { padding: 0 14px 30px; }
 }
 
+/* ── Indicador de frescura de precios ── */
+.price-status { display:inline-flex; align-items:center; gap:5px; }
+.ps-dot {
+  width:7px; height:7px; border-radius:50%; flex-shrink:0;
+  transition: background .3s;
+}
+.ps-live   { background:#0a6647; box-shadow:0 0 5px rgba(10,102,71,.6); }
+.ps-ok     { background:#ca8a04; }
+.ps-stale  { background:#8c2e10; }
+.ps-unknown{ background:#a8a7a2; }
+
 /* ── Editor de posiciones ── */
 #editor-backdrop {
   display: none; position: fixed; inset: 0;
@@ -766,12 +777,27 @@ function buildKpis(containerId, tC, tV, tcSub, TC) {
    ═══════════════════════════════════════════════ */
 let donutChart = null, plbarChart = null;
 
-function renderDashboard(precios, TC, fecha) {
+function renderDashboard(precios, TC, fecha, updatedAt = null) {
   const TODAY = new Date(fecha + 'T00:00:00');
   const fechaLabel = new Date(fecha + 'T12:00:00').toLocaleDateString('es-MX', {day:'numeric', month:'short', year:'numeric'});
 
   document.getElementById('hdr-title').textContent = CONFIG.titulo;
-  document.getElementById('hdr-meta').textContent = `Actualizado ${fecha} · T/C $${TC.toFixed(2)}`;
+
+  // Indicador de frescura
+  const updAt = updatedAt;
+  let dotClass = 'ps-unknown', dotLabel = 'Sin datos';
+  if (updAt) {
+    const ageMin = (Date.now() - new Date(updAt)) / 60000;
+    const open   = isMarketOpen();
+    if (open && ageMin < 20)       { dotClass = 'ps-live';  dotLabel = 'En vivo'; }
+    else if (ageMin < 90)          { dotClass = 'ps-ok';    dotLabel = 'Reciente'; }
+    else                           { dotClass = 'ps-stale'; dotLabel = 'Desactualizado'; }
+    const timeStr = new Date(updAt).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit',timeZone:'America/Mexico_City'});
+    document.getElementById('hdr-meta').innerHTML =
+      `<span class="price-status"><span class="ps-dot ${dotClass}"></span>${dotLabel} · ${timeStr} · T/C $${TC.toFixed(2)}</span>`;
+  } else {
+    document.getElementById('hdr-meta').textContent = `Actualizado ${fecha} · T/C $${TC.toFixed(2)}`;
+  }
 
   /* ── TAB 1 ── */
   const PAL = ['#0b2e4a','#134f80','#2278bf','#3a8fd4','#5aa4de','#7dbae8','#9fcdf0',
@@ -1445,8 +1471,9 @@ async function fetchMarketData() {
   const precios = { ...CONFIG.fallback.precios, ...(data.precios || {}) };
   return {
     precios,
-    tc:    data.tc    || CONFIG.fallback.tc,
-    fecha: data.fecha || new Date().toISOString().split('T')[0],
+    tc:         data.tc         || CONFIG.fallback.tc,
+    fecha:      data.fecha      || new Date().toISOString().split('T')[0],
+    updated_at: data.updated_at || null,
   };
 }
 
@@ -1484,14 +1511,14 @@ async function init(force = false) {
       Store.set(KEY, { ...result, ts: Date.now() });
     }
 
-    renderDashboard(result.precios, result.tc, result.fecha);
+    renderDashboard(result.precios, result.tc, result.fecha, result.updated_at);
 
   } catch (err) {
     console.error('[init]', err);
     const el = document.getElementById('error-msg');
     el.textContent = `⚠ No se pudieron obtener precios: ${err.message} — Mostrando precios de respaldo (${FALLBACK.fecha}).`;
     el.style.display = 'block';
-    renderDashboard(FALLBACK.precios, FALLBACK.tc, FALLBACK.fecha);
+    renderDashboard(FALLBACK.precios, FALLBACK.tc, FALLBACK.fecha, null);
   } finally {
     setRefreshState(false);
   }
@@ -1608,7 +1635,7 @@ function savePositions() {
   CONFIG.posiciones_mxn = mxn;
   closeEditor();
   const cached = Store.get('pf_v2_data');
-  if (cached) renderDashboard(cached.precios, cached.tc, cached.fecha);
+  if (cached) renderDashboard(cached.precios, cached.tc, cached.fecha, cached.updated_at);
   else init(true);
 }
 
