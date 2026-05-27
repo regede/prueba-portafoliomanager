@@ -1477,7 +1477,7 @@ function fetchTO(url, ms=9000) {
    Fallback → CONFIG.fallback si el archivo falla.
    ═══════════════════════════════════════════════ */
 async function fetchMarketData() {
-  const res = await fetchTO('prices.json', 5000);
+  const res = await fetchTO(`prices.json?_=${Date.now()}`, 5000);
   if (!res.ok) throw new Error(`prices.json no encontrado (${res.status}).`);
   const data = await res.json();
   const precios = { ...CONFIG.fallback.precios, ...(data.precios || {}) };
