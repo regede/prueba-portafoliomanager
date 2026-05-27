@@ -42,6 +42,10 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); font
   animation: spin .8s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+@keyframes fadeInUp {
+  from { opacity:0; transform:translateX(-50%) translateY(8px); }
+  to   { opacity:1; transform:translateX(-50%) translateY(0); }
+}
 #error-msg {
   display: none; background: var(--red-bg); color: var(--red);
   padding: 12px 16px; border-radius: 8px; font-size: 13px; margin-bottom: 16px;
@@ -525,10 +529,12 @@ tbody tr:hover:not(.row-group):not(.row-total):not(.row-sub) td { background: va
     <div class="ep-tabs">
       <div class="ep-tab active" onclick="switchETab('usd')">📈 USD</div>
       <div class="ep-tab"       onclick="switchETab('mxn')">💱 MXN / SIC</div>
+      <div class="ep-tab"       onclick="switchETab('sync')">🔗 GitHub Sync</div>
     </div>
     <div class="ep-body">
       <div id="ep-usd"></div>
-      <div id="ep-mxn" style="display:none"></div>
+      <div id="ep-mxn"  style="display:none"></div>
+      <div id="ep-sync" style="display:none"></div>
     </div>
   </div>
 
@@ -1548,6 +1554,7 @@ function loadPositions() {
 function openEditor() {
   renderEPane('usd');
   renderEPane('mxn');
+  renderSyncPane();
   document.getElementById('editor-panel').classList.add('open');
   document.getElementById('editor-backdrop').classList.add('open');
 }
@@ -1559,9 +1566,10 @@ function closeEditor() {
 
 function switchETab(tab) {
   document.querySelectorAll('.ep-tab').forEach((t, i) =>
-    t.classList.toggle('active', ['usd','mxn'][i] === tab));
-  document.getElementById('ep-usd').style.display = tab === 'usd' ? '' : 'none';
-  document.getElementById('ep-mxn').style.display = tab === 'mxn' ? '' : 'none';
+    t.classList.toggle('active', ['usd','mxn','sync'][i] === tab));
+  document.getElementById('ep-usd').style.display  = tab === 'usd'  ? '' : 'none';
+  document.getElementById('ep-mxn').style.display  = tab === 'mxn'  ? '' : 'none';
+  document.getElementById('ep-sync').style.display = tab === 'sync' ? '' : 'none';
 }
 
 function renderEPane(which) {
@@ -1637,16 +1645,29 @@ function collectERows(which) {
   });
 }
 
-function savePositions() {
+async function savePositions() {
   const usd = collectERows('usd');
   const mxn = collectERows('mxn');
   Store.set(POS_KEY, { usd, mxn });
   CONFIG.posiciones_usd = usd;
   CONFIG.posiciones_mxn = mxn;
-  // Recomputar SIC_TICKERS con las nuevas posiciones
   SIC_TICKERS = new Set(CONFIG.posiciones_mxn.filter(p => p.sic_usd).map(p => p.t));
   closeEditor();
-  // Forzar re-fetch para que nuevos tickers obtengan precios frescos
+
+  // Sincronizar tickers.json en GitHub si hay PAT configurado
+  const pat = Store.get(PAT_KEY);
+  if (pat) {
+    const allTickers = [...new Set([...usd.map(p => p.t), ...mxn.map(p => p.t)].filter(Boolean))].sort();
+    syncTickersToGitHub(allTickers, pat)
+      .then(async result => {
+        if (result.changed) {
+          showToast(`✓ ${result.added.join(', ')} agregado(s) a tickers.json — obteniendo precios…`);
+          await triggerWorkflowDispatch(pat);
+        }
+      })
+      .catch(err => showToast(`⚠ Error sync GitHub: ${err.message}`, true));
+  }
+
   init(true);
 }
 
@@ -1655,6 +1676,113 @@ function resetPositions() {
   Store.set(POS_KEY, null);
   location.reload();
 }
+
+/* ═══════════════════════════════════════════════
+   GITHUB SYNC — sincroniza tickers.json via API
+   ═══════════════════════════════════════════════ */
+const PAT_KEY = 'gh_pat';
+const GH_REPO = 'regede/prueba-portafoliomanager';
+
+function renderSyncPane() {
+  const hasPat = !!Store.get(PAT_KEY);
+  const el = document.getElementById('ep-sync');
+  el.innerHTML = `
+    <div style="margin-bottom:16px">
+      <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px">
+        GitHub Personal Access Token
+      </div>
+      <input id="ep-pat-input" class="ep-input" type="password"
+        placeholder="${hasPat ? '••••••••••••••••••••••••' : 'ghp_xxxxxxxxxxxxxxxxxxxx'}"
+        style="width:100%;margin-bottom:8px">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
+        <button class="ep-btn ep-btn-primary" onclick="savePat()" style="font-size:11px;padding:5px 12px">
+          Guardar token
+        </button>
+        ${hasPat ? '<button class="ep-btn ep-btn-ghost" onclick="clearPat()" style="font-size:11px;padding:5px 12px">Borrar</button>' : ''}
+      </div>
+      <div style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:${hasPat ? 'var(--green)' : 'var(--faint)'}">
+        <span style="width:7px;height:7px;border-radius:50%;flex-shrink:0;background:${hasPat ? 'var(--green)' : 'var(--border2)'};display:inline-block"></span>
+        ${hasPat ? 'Token configurado — sync automático al guardar' : 'Sin token — actualizaciones manuales requeridas'}
+      </div>
+    </div>
+    <div class="ep-notice">
+      Con el token configurado, al hacer clic en <strong>Guardar y actualizar</strong> el sistema:<br>
+      <span style="display:block;margin-top:5px">① Detecta tickers nuevos y los agrega a <code>tickers.json</code> en el repo</span>
+      <span style="display:block">② Dispara GitHub Actions para obtener precios de inmediato</span>
+      <br>
+      <strong>Crear token (2 min):</strong>
+      <a href="https://github.com/settings/tokens/new?scopes=repo,workflow" target="_blank" style="color:var(--accent);font-weight:600">
+        github.com/settings/tokens/new
+      </a><br>
+      Selecciona los scopes: <code>repo</code> y <code>workflow</code> → copia el token → pégalo arriba.<br><br>
+      <span style="color:var(--muted)">🔒 El token se guarda solo en este navegador (localStorage). Nunca se envía a ningún servidor externo.</span>
+    </div>
+    <div id="ep-sync-status" style="margin-top:10px;font-size:11px;min-height:18px"></div>`;
+}
+
+function savePat() {
+  const val = document.getElementById('ep-pat-input')?.value.trim();
+  if (!val) { document.getElementById('ep-sync-status').innerHTML = '<span style="color:var(--red)">⚠ Ingresa un token primero</span>'; return; }
+  Store.set(PAT_KEY, val);
+  renderSyncPane();
+  document.getElementById('ep-sync-status').innerHTML = '<span style="color:var(--green)">✓ Token guardado correctamente</span>';
+}
+
+function clearPat() {
+  if (!confirm('¿Borrar el token de GitHub de este navegador?')) return;
+  Store.set(PAT_KEY, null);
+  renderSyncPane();
+}
+
+async function syncTickersToGitHub(tickers, pat) {
+  const apiUrl  = `https://api.github.com/repos/${GH_REPO}/contents/tickers.json`;
+  const headers = { Authorization: `Bearer ${pat}`, Accept: 'application/vnd.github.v3+json', 'Content-Type': 'application/json' };
+
+  const getRes = await fetch(apiUrl, { headers });
+  if (!getRes.ok) throw new Error(`GitHub GET ${getRes.status}: token inválido o sin permisos`);
+
+  const file    = await getRes.json();
+  const current = JSON.parse(atob(file.content.replace(/\s/g, '')));
+  const merged  = [...new Set([...current, ...tickers])].sort();
+  const added   = merged.filter(t => !current.includes(t));
+
+  if (!added.length) return { changed: false, added: [] };
+
+  const putRes = await fetch(apiUrl, {
+    method: 'PUT', headers,
+    body: JSON.stringify({
+      message: `tickers: agregar ${added.join(', ')}`,
+      content: btoa(JSON.stringify(merged, null, 2) + '\n'),
+      sha: file.sha
+    })
+  });
+  if (!putRes.ok) throw new Error(`GitHub PUT ${putRes.status}`);
+  return { changed: true, added };
+}
+
+async function triggerWorkflowDispatch(pat) {
+  await fetch(`https://api.github.com/repos/${GH_REPO}/actions/workflows/update-prices.yml/dispatches`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${pat}`, Accept: 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ref: 'main' })
+  });
+}
+
+function showToast(msg, isError = false) {
+  const old = document.getElementById('pf-toast'); if (old) old.remove();
+  const t = document.createElement('div');
+  t.id = 'pf-toast';
+  t.style.cssText = `position:fixed;bottom:28px;left:50%;transform:translateX(-50%);
+    background:${isError ? 'var(--red-bg)' : '#1a1a18'};color:${isError ? 'var(--red)' : '#fff'};
+    padding:10px 20px;border-radius:9px;font-size:12px;font-weight:500;
+    z-index:500;box-shadow:0 4px 16px rgba(0,0,0,.18);white-space:nowrap;
+    animation:fadeInUp .2s ease`;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t?.remove(), 4000);
+}
+
+/* ── fin GitHub Sync ── */
 
 loadPositions();
 init();
