@@ -681,7 +681,8 @@ const STATIC = CONFIG;
 const FALLBACK = { precios: CONFIG.fallback.precios, tc: CONFIG.fallback.tc, fecha: CONFIG.fallback.fecha };
 
 // Set dinámico de tickers SIC (USD cotizando en MXN vía SIC)
-const SIC_TICKERS = new Set(CONFIG.posiciones_mxn.filter(p => p.sic_usd).map(p => p.t));
+// let (no const) para poder recomputar cuando el editor cambia posiciones
+let SIC_TICKERS = new Set(CONFIG.posiciones_mxn.filter(p => p.sic_usd).map(p => p.t));
 
 // Actualizar título
 document.title = CONFIG.titulo;
@@ -805,10 +806,13 @@ function renderDashboard(precios, TC, fecha, updatedAt = null) {
 
   const groups1 = [
     { label:'USD', name:'USD — Mercado americano',
-      rows: STATIC.posiciones_usd.map(p => ({...p, cur:'USD', pN: precios[p.t]})) },
+      rows: STATIC.posiciones_usd.map(p => ({...p, cur:'USD',
+        pN: precios[p.t] ?? p.pE})) },
     { label:'MXN', name:'MXN / SIC — Mercado nacional',
       rows: STATIC.posiciones_mxn.map(p => ({...p, cur:'MXN',
-        pN: p.sic_usd ? precios[p.t] * TC : precios[p.t]})) }
+        pN: p.sic_usd
+          ? (precios[p.t] != null ? precios[p.t] * TC : p.pE)
+          : (precios[p.t] ?? p.pE)})) }
   ];
 
   const tb1 = document.getElementById('t1-body');
@@ -1106,9 +1110,11 @@ function renderTab4(precios, TC, fecha) {
   const events = STATIC.evol_events;
 
   // Actualizar el último punto con precios en vivo
-  const valUSD = STATIC.posiciones_usd.reduce((s,p) => s + p.s * (precios[p.t] || 0), 0);
+  const valUSD = STATIC.posiciones_usd.reduce((s,p) => s + p.s * (precios[p.t] ?? p.pE), 0);
   const valMXN = STATIC.posiciones_mxn.reduce((s,p) => {
-    const pN = p.sic_usd ? (precios[p.t]||0) * TC : (precios[p.t]||0);
+    const pN = p.sic_usd
+      ? (precios[p.t] != null ? precios[p.t] * TC : p.pE)
+      : (precios[p.t] ?? p.pE);
     return s + p.s * pN;
   }, 0);
   values[values.length - 1] = Math.round(valUSD * TCf + valMXN);
@@ -1531,8 +1537,12 @@ const POS_KEY = 'pf_posiciones';
 
 function loadPositions() {
   const saved = Store.get(POS_KEY);
-  if (saved?.usd?.length) CONFIG.posiciones_usd = saved.usd;
-  if (saved?.mxn?.length !== undefined) CONFIG.posiciones_mxn = saved.mxn;
+  if (!saved) return;
+  if (Array.isArray(saved.usd)) CONFIG.posiciones_usd = saved.usd;
+  if (Array.isArray(saved.mxn)) {
+    CONFIG.posiciones_mxn = saved.mxn;
+    SIC_TICKERS = new Set(CONFIG.posiciones_mxn.filter(p => p.sic_usd).map(p => p.t));
+  }
 }
 
 function openEditor() {
@@ -1633,10 +1643,11 @@ function savePositions() {
   Store.set(POS_KEY, { usd, mxn });
   CONFIG.posiciones_usd = usd;
   CONFIG.posiciones_mxn = mxn;
+  // Recomputar SIC_TICKERS con las nuevas posiciones
+  SIC_TICKERS = new Set(CONFIG.posiciones_mxn.filter(p => p.sic_usd).map(p => p.t));
   closeEditor();
-  const cached = Store.get('pf_v2_data');
-  if (cached) renderDashboard(cached.precios, cached.tc, cached.fecha, cached.updated_at);
-  else init(true);
+  // Forzar re-fetch para que nuevos tickers obtengan precios frescos
+  init(true);
 }
 
 function resetPositions() {
