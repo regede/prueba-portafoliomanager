@@ -783,7 +783,7 @@ window.addEventListener('scroll', () => {
 
 /* ── Build KPIs ── */
 function buildKpis(containerId, tC, tV, tcSub, TC) {
-  const tPL = tV - tC, tp = tPL / tC * 100, pos = tPL >= 0;
+  const tPL = tV - tC, tp = tC ? tPL / tC * 100 : 0, pos = tPL >= 0;
   document.getElementById(containerId).innerHTML = `
     <div class="kpi">
       <div class="kpi-label">Costo total</div>
@@ -905,7 +905,13 @@ function renderDashboard(precios, TC, fecha, updatedAt = null) {
   const grandTV = grand1V;
   all1.forEach(r => { const el = document.getElementById('cp1-'+r.t); if(el) el.textContent = ((r.nM/grandTV)*100).toFixed(1)+'%'; });
 
-  const gPL1 = grand1V-grand1C, gRet1 = gPL1/grand1C*100, gip1 = gPL1>=0;
+  if (!all1.length) {
+    const empty = document.createElement('tr');
+    empty.innerHTML = `<td colspan="11" style="text-align:center;color:var(--faint);padding:24px">Sin posiciones — agrégalas con “Editar posiciones”</td>`;
+    tb1.appendChild(empty);
+  }
+
+  const gPL1 = grand1V-grand1C, gRet1 = grand1C ? gPL1/grand1C*100 : 0, gip1 = gPL1>=0;
   const gt1 = document.createElement('tr'); gt1.className='row-total';
   gt1.innerHTML=`<td colspan="2">Total portafolio</td><td></td><td></td><td>${fmx(grand1C)}</td><td></td><td>—</td><td>${fmx(grand1V)}</td><td class="${gip1?'pos':'neg'}">${gip1?'+':''}${fmx(gPL1)}</td><td><span class="badge badge-neu">100%</span></td><td class="${gip1?'pos':'neg'}">${gip1?'+':''}${fmt(gRet1,1)}%</td>`;
   tb1.appendChild(gt1);
@@ -1050,7 +1056,13 @@ function renderDashboard(precios, TC, fecha, updatedAt = null) {
     });
   });
 
-  const g2Var=grand2V-grand2C,g2Pct=g2Var/grand2C*100,g2ip=g2Var>=0;
+  if (!grand2C) {
+    const empty=document.createElement('tr');
+    empty.innerHTML=`<td colspan="12" style="text-align:center;color:var(--faint);padding:24px">Sin compras registradas</td>`;
+    tb2.appendChild(empty);
+  }
+
+  const g2Var=grand2V-grand2C,g2Pct=grand2C?g2Var/grand2C*100:0,g2ip=g2Var>=0;
   const gt2=document.createElement('tr'); gt2.className='row-total';
   gt2.innerHTML=`<td colspan="4">Total portafolio</td><td>${fmx(grand2C)}</td><td>—</td><td>—</td><td>${fmx(grand2V)}</td><td>—</td><td>${badge(g2Var,'MXN')}</td><td><span class="${g2ip?'pos':'neg'}" style="font-weight:700">${g2ip?'+':''}${fmt(g2Pct,1)}%</span></td><td>—</td>`;
   tb2.appendChild(gt2);
@@ -1106,13 +1118,19 @@ function renderTab3(TC, fecha) {
     tb3.appendChild(tr);
   });
 
-  const tcPromPond = sumTcPonderado / totalMonto;
+  if (!tickers.length) {
+    const empty = document.createElement('tr');
+    empty.innerHTML = `<td colspan="8" style="text-align:center;color:var(--faint);padding:24px">Sin posiciones USD para analizar efecto T/C</td>`;
+    tb3.appendChild(empty);
+  }
+
+  const tcPromPond = totalMonto ? sumTcPonderado / totalMonto : 0;
   const totalPos = totalEfecto >= 0;
   const gt3 = document.createElement('tr'); gt3.className = 'row-total';
   gt3.innerHTML = `<td>Total USD</td><td>${fdu(totalMonto,0)} <span class="cur">USD</span></td><td>$${tcPromPond.toFixed(2)}</td><td>$${TC.toFixed(2)}</td><td class="${totalPos?'fx-pos':'fx-neg'}">${totalPos?'+':''}$${(TC-tcPromPond).toFixed(2)}</td><td class="${totalPos?'pos':'neg'}" style="font-weight:700">${totalPos?'+':''}${fmx(totalEfecto)}</td><td>${fmx(totalSinFX)}</td><td>${fmx(totalConFX)}</td>`;
   tb3.appendChild(gt3);
 
-  const efPct = (totalEfecto / totalSinFX) * 100, efPos = totalEfecto >= 0;
+  const efPct = totalSinFX ? (totalEfecto / totalSinFX) * 100 : 0, efPos = totalEfecto >= 0;
   document.getElementById('t3-kpis').innerHTML = `
     <div class="kpi">
       <div class="kpi-label">T/C prom. compra</div>
@@ -1144,11 +1162,22 @@ function renderTab3(TC, fecha) {
    ═══════════════════════════════════════════════ */
 let evolChart = null;
 function renderTab4(precios, TC, fecha) {
-  const TCf    = STATIC.evol_tc_fixed;
-  const labels = [...STATIC.evol_labels];
-  const values = [...STATIC.evol_values];
-  const costs  = [...STATIC.evol_costs];
-  const events = STATIC.evol_events;
+  const TCf    = STATIC.evol_tc_fixed || CONFIG.fallback.tc;
+  const labels = [...(STATIC.evol_labels || [])];
+  const values = [...(STATIC.evol_values || [])];
+  const costs  = [...(STATIC.evol_costs  || [])];
+  const events = STATIC.evol_events || {};
+
+  // Sin serie histórica: estado vacío y salir
+  if (!labels.length || !values.length) {
+    document.getElementById('t4-tc-note').textContent = 'Sin datos de evolución registrados';
+    document.getElementById('t4-kpis').innerHTML =
+      `<div class="kpi"><div class="kpi-label">Evolución</div><div class="kpi-value">—</div><div class="kpi-sub">sin datos</div></div>`;
+    if (evolChart) { evolChart.destroy(); evolChart = null; }
+    document.getElementById('t4-fn-l').textContent = `Actualizado ${fecha}`;
+    document.getElementById('t4-fn-r').textContent = `T/C fijo: $${TCf.toFixed(2)} MXN/USD`;
+    return;
+  }
 
   // Actualizar el último punto con precios en vivo
   const valUSD = STATIC.posiciones_usd.reduce((s,p) => s + p.s * (precios[p.t] ?? p.pE), 0);
@@ -1689,9 +1718,12 @@ async function savePositions() {
   SIC_TICKERS = new Set(CONFIG.posiciones_mxn.filter(p => p.sic_usd).map(p => p.t));
   closeEditor();
 
-  // Guardar en Supabase si hay sesión activa
+  // Guardar en Supabase si hay sesión activa (posiciones + config)
   if (currentUser && currentPortfolioId) {
-    savePositionsToDB(currentPortfolioId, usd, mxn)
+    Promise.all([
+      savePositionsToDB(currentPortfolioId, usd, mxn),
+      saveConfigToDB(currentPortfolioId)
+    ])
       .then(() => showToast('✓ Portafolio guardado'))
       .catch(err => showToast(`⚠ Error guardando en DB: ${err.message}`, true));
   }
@@ -1838,6 +1870,53 @@ async function savePositionsToDB(portfolioId, usd, mxn) {
   await Promise.all(ops);
 }
 
+/* ── Config del portafolio (todo lo no-posición vive en portfolios.config jsonb) ──
+   Campos: titulo, compras_usd/mxn, tc_compras, tc_compras_montos,
+   evol_labels/values/costs/events/tc_fixed, cerradas, divs           */
+const CONFIG_FIELDS = [
+  'titulo','compras_usd','compras_mxn','tc_compras','tc_compras_montos',
+  'evol_labels','evol_values','evol_costs','evol_events','evol_tc_fixed',
+  'cerradas','divs'
+];
+
+function extractConfig() {
+  const o = {};
+  CONFIG_FIELDS.forEach(k => { o[k] = CONFIG[k]; });
+  return o;
+}
+
+function applyConfig(cfg) {
+  if (!cfg) return;
+  CONFIG_FIELDS.forEach(k => { if (cfg[k] !== undefined) CONFIG[k] = cfg[k]; });
+  if (CONFIG.titulo) document.title = CONFIG.titulo;
+}
+
+// Estado limpio para usuarios nuevos: sin datos demo en ninguna pestaña
+function clearUserData() {
+  CONFIG.posiciones_usd = [];
+  CONFIG.posiciones_mxn = [];
+  CONFIG.compras_usd = [];
+  CONFIG.compras_mxn = [];
+  CONFIG.tc_compras = {};
+  CONFIG.tc_compras_montos = {};
+  CONFIG.cerradas = [];
+  CONFIG.divs = [];
+  CONFIG.evol_labels = [];
+  CONFIG.evol_values = [];
+  CONFIG.evol_costs = [];
+  CONFIG.evol_events = {};
+  SIC_TICKERS = new Set();
+}
+
+async function loadConfigFromDB(portfolioId) {
+  const { data } = await sb.from('portfolios').select('config').eq('id', portfolioId).single();
+  return data?.config || null;
+}
+
+async function saveConfigToDB(portfolioId) {
+  await sb.from('portfolios').update({ config: extractConfig() }).eq('id', portfolioId);
+}
+
 /* ── Auth state listener ── */
 sb.auth.onAuthStateChange(async (event, session) => {
   if (session?.user) {
@@ -1846,13 +1925,20 @@ sb.auth.onAuthStateChange(async (event, session) => {
     try {
       currentPortfolioId = await getOrCreatePortfolio(currentUser.id);
       if (currentPortfolioId) {
-        const { usd, mxn } = await loadPositionsFromDB(currentPortfolioId);
-        if (usd.length || mxn.length) {
-          CONFIG.posiciones_usd = usd;
-          CONFIG.posiciones_mxn = mxn;
-          SIC_TICKERS = new Set(CONFIG.posiciones_mxn.filter(p => p.sic_usd).map(p => p.t));
-          Store.set(POS_KEY, { usd, mxn });
+        const cfg = await loadConfigFromDB(currentPortfolioId);
+        if (cfg && Object.keys(cfg).length) {
+          // Usuario con datos guardados → cargar su config real
+          applyConfig(cfg);
+        } else {
+          // Usuario nuevo → arrancar limpio (sin datos demo) y persistir
+          clearUserData();
+          await saveConfigToDB(currentPortfolioId);
         }
+        const { usd, mxn } = await loadPositionsFromDB(currentPortfolioId);
+        CONFIG.posiciones_usd = usd;
+        CONFIG.posiciones_mxn = mxn;
+        SIC_TICKERS = new Set(CONFIG.posiciones_mxn.filter(p => p.sic_usd).map(p => p.t));
+        Store.set(POS_KEY, { usd, mxn });
       }
     } catch(e) { console.warn('[Supabase] Error cargando portafolio:', e); }
     init(true);

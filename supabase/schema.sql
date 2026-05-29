@@ -33,7 +33,11 @@ create table public.portfolios (
   id          uuid primary key default gen_random_uuid(),
   owner_id    uuid not null references auth.users(id) on delete cascade,
   nombre      text not null default 'Mi Portafolio',
-  config      jsonb not null default '{}',  -- título, evol_labels, evol_values, etc.
+  -- config: datos no-posición del portafolio (frontend: CONFIG_FIELDS)
+  --   { titulo, compras_usd[], compras_mxn[], tc_compras{}, tc_compras_montos{},
+  --     evol_labels[], evol_values[], evol_costs[], evol_events{}, evol_tc_fixed,
+  --     cerradas[], divs[] }
+  config      jsonb not null default '{}',
   created_at  timestamptz default now(),
   updated_at  timestamptz default now()
 );
