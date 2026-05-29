@@ -963,7 +963,9 @@ function renderDashboard(precios, TC, fecha, updatedAt = null) {
   /* ── TAB 2 ── */
   function hydrateP(r) {
     const isSicUsd = r.cur==='MXN' && SIC_TICKERS.has(r.t);
-    return {...r, pN: isSicUsd ? precios[r.t]*TC : precios[r.t]};
+    const px = precios[r.t];
+    // Fallback al precio de compra si no hay precio en vivo (evita NaN, igual que Tab 1)
+    return {...r, pN: isSicUsd ? (px != null ? px * TC : r.pC) : (px ?? r.pC)};
   }
   function calcRow2(r) {
     const costoO=r.s*r.pC, costoM=r.cur==='USD'?costoO*TC:costoO;
