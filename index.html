@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Mi Portafolio de Inversión</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
 :root { color-scheme: light; }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -337,6 +338,34 @@ tbody tr:hover:not(.row-group):not(.row-total):not(.row-sub) td { background: va
 </style>
 </head>
 <body>
+<!-- ══ PANTALLA DE LOGIN ══ -->
+<div id="login-screen" style="display:none;position:fixed;inset:0;z-index:1000;background:var(--bg);align-items:center;justify-content:center;padding:24px">
+  <div style="background:var(--surface);border:.5px solid var(--border);border-radius:16px;padding:32px 28px;width:100%;max-width:380px;box-shadow:0 8px 40px rgba(0,0,0,0.08)">
+    <div style="text-align:center;margin-bottom:24px">
+      <div style="font-size:20px;font-weight:700;letter-spacing:-.02em;margin-bottom:6px">📊 Portafolio Manager</div>
+      <div style="font-size:12.5px;color:var(--muted)">Accede a tu portafolio de inversiones</div>
+    </div>
+    <!-- Tabs login / signup -->
+    <div style="display:flex;border:.5px solid var(--border2);border-radius:8px;padding:3px;margin-bottom:18px;gap:3px">
+      <button id="tab-login"  onclick="setAuthMode('login')"  style="flex:1;padding:6px;border-radius:6px;border:none;font-size:12px;font-weight:600;font-family:var(--font);cursor:pointer;background:var(--accent);color:#fff;transition:all .15s">Iniciar sesión</button>
+      <button id="tab-signup" onclick="setAuthMode('signup')" style="flex:1;padding:6px;border-radius:6px;border:none;font-size:12px;font-weight:600;font-family:var(--font);cursor:pointer;background:transparent;color:var(--muted);transition:all .15s">Crear cuenta</button>
+    </div>
+    <!-- Mensaje error/éxito -->
+    <div id="auth-msg" style="display:none;padding:9px 12px;border-radius:7px;font-size:12px;margin-bottom:14px"></div>
+    <!-- Campos -->
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px">
+      <input id="auth-email"    type="email"    placeholder="correo@ejemplo.com"       style="padding:9px 12px;border:.5px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--font);outline:none" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border2)'" onkeydown="if(event.key==='Enter')document.getElementById('auth-password').focus()">
+      <input id="auth-password" type="password" placeholder="Contraseña (mín. 6 chars)" style="padding:9px 12px;border:.5px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--font);outline:none" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border2)'" onkeydown="if(event.key==='Enter')handleAuth()">
+    </div>
+    <button id="auth-submit" onclick="handleAuth()" style="width:100%;padding:10px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:13px;font-weight:600;font-family:var(--font);cursor:pointer;margin-bottom:12px" onmouseover="this.style.opacity='.88'" onmouseout="this.style.opacity='1'">Entrar</button>
+    <div style="text-align:center;font-size:11px;color:var(--faint);margin-bottom:10px">— o —</div>
+    <button onclick="signInWithGoogle()" style="width:100%;padding:9px;border-radius:8px;border:.5px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px;font-weight:500;font-family:var(--font);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='var(--surface)'">
+      <svg width="15" height="15" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+      Continuar con Google
+    </button>
+  </div>
+</div>
+
 <div id="app">
 
   <!-- Loading -->
@@ -354,6 +383,10 @@ tbody tr:hover:not(.row-group):not(.row-total):not(.row-sub) td { background: va
       <div class="hdr">
         <div class="hdr-title" id="hdr-title">Mi Portafolio de Inversión</div>
         <div class="hdr-right">
+          <div id="user-badge" style="display:none;align-items:center;gap:7px">
+            <span id="user-email-badge" style="font-size:11px;color:var(--muted);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+            <button onclick="signOut()" style="font-size:10px;padding:3px 8px;border-radius:5px;border:.5px solid var(--border2);background:var(--bg);color:var(--muted);cursor:pointer;font-family:var(--font)">Salir</button>
+          </div>
           <div class="hdr-meta" id="hdr-meta">—</div>
           <button id="edit-btn" onclick="openEditor()" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:500;font-family:var(--font);padding:5px 12px;border-radius:7px;border:.5px solid var(--border2);background:var(--surface);color:var(--muted);cursor:pointer;transition:background .15s,color .15s;white-space:nowrap">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -1654,6 +1687,13 @@ async function savePositions() {
   SIC_TICKERS = new Set(CONFIG.posiciones_mxn.filter(p => p.sic_usd).map(p => p.t));
   closeEditor();
 
+  // Guardar en Supabase si hay sesión activa
+  if (currentUser && currentPortfolioId) {
+    savePositionsToDB(currentPortfolioId, usd, mxn)
+      .then(() => showToast('✓ Portafolio guardado'))
+      .catch(err => showToast(`⚠ Error guardando en DB: ${err.message}`, true));
+  }
+
   // Sincronizar tickers.json en GitHub si hay PAT configurado
   const pat = Store.get(PAT_KEY);
   if (pat) {
@@ -1676,6 +1716,148 @@ function resetPositions() {
   Store.set(POS_KEY, null);
   location.reload();
 }
+
+/* ═══════════════════════════════════════════════
+   SUPABASE — Auth + Portfolio DB
+   ═══════════════════════════════════════════════ */
+const SUPABASE_URL = 'https://wtsecrujrjvnvuzphyyz.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_zwJBQaWojHajgNDTgb51Kw_Bp1KzMw-';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let currentUser       = null;
+let currentPortfolioId = null;
+let authMode          = 'login';
+
+/* ── UI helpers ── */
+function setAuthMode(mode) {
+  authMode = mode;
+  const isLogin = mode === 'login';
+  const tl = document.getElementById('tab-login'), ts = document.getElementById('tab-signup');
+  tl.style.background = isLogin ? 'var(--accent)' : 'transparent';
+  tl.style.color      = isLogin ? '#fff' : 'var(--muted)';
+  ts.style.background = isLogin ? 'transparent' : 'var(--accent)';
+  ts.style.color      = isLogin ? 'var(--muted)' : '#fff';
+  document.getElementById('auth-submit').textContent = isLogin ? 'Entrar' : 'Crear cuenta';
+  setAuthMsg('');
+}
+
+function setAuthMsg(msg, isError = true) {
+  const el = document.getElementById('auth-msg');
+  if (!msg) { el.style.display = 'none'; return; }
+  el.style.cssText = `display:block;padding:9px 12px;border-radius:7px;font-size:12px;margin-bottom:14px;
+    background:${isError ? 'var(--red-bg)' : 'var(--green-bg)'};
+    color:${isError ? 'var(--red)' : 'var(--green)'}`;
+  el.textContent = msg;
+}
+
+function showDashboard(user) {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('user-email-badge').textContent = user.email;
+  document.getElementById('user-badge').style.display = 'flex';
+}
+
+function showLoginScreen() {
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('dashboard').style.display   = 'none';
+  document.getElementById('loading').style.display     = 'none';
+  document.getElementById('user-badge').style.display  = 'none';
+}
+
+/* ── Auth actions ── */
+async function handleAuth() {
+  const email    = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value;
+  const btn      = document.getElementById('auth-submit');
+  if (!email || !password) { setAuthMsg('Ingresa correo y contraseña'); return; }
+  btn.disabled    = true;
+  btn.textContent = authMode === 'login' ? 'Ingresando…' : 'Creando cuenta…';
+  setAuthMsg('');
+  const { error } = authMode === 'login'
+    ? await sb.auth.signInWithPassword({ email, password })
+    : await sb.auth.signUp({ email, password });
+  if (error) {
+    setAuthMsg(error.message);
+    btn.disabled    = false;
+    btn.textContent = authMode === 'login' ? 'Entrar' : 'Crear cuenta';
+  } else if (authMode === 'signup') {
+    setAuthMsg('¡Cuenta creada! Revisa tu correo para confirmar.', false);
+    btn.disabled    = false;
+    btn.textContent = 'Crear cuenta';
+  }
+}
+
+async function signInWithGoogle() {
+  const { error } = await sb.auth.signInWithOAuth({
+    provider: 'google',
+    options:  { redirectTo: window.location.href }
+  });
+  if (error) setAuthMsg(error.message);
+}
+
+async function signOut() {
+  await sb.auth.signOut();
+  Store.set(POS_KEY, null);
+  Store.set('pf_v2_data', null);
+  location.reload();
+}
+
+/* ── Portfolio DB ── */
+async function getOrCreatePortfolio(userId) {
+  const { data } = await sb.from('portfolios').select('id').eq('owner_id', userId).limit(1);
+  if (data?.length) return data[0].id;
+  const { data: p } = await sb.from('portfolios')
+    .insert({ owner_id: userId, nombre: CONFIG.titulo }).select('id').single();
+  return p?.id || null;
+}
+
+async function loadPositionsFromDB(portfolioId) {
+  const [{ data: usd }, { data: mxn }] = await Promise.all([
+    sb.from('posiciones_usd').select('*').eq('portfolio_id', portfolioId).order('sort_order'),
+    sb.from('posiciones_mxn').select('*').eq('portfolio_id', portfolioId).order('sort_order')
+  ]);
+  return {
+    usd: (usd || []).map(r => ({ t:r.ticker, n:r.nombre, s:+r.shares, pE:+r.precio_entrada, mnt:+r.monto })),
+    mxn: (mxn || []).map(r => ({ t:r.ticker, n:r.nombre, s:+r.shares, pE:+r.precio_entrada, cM:+r.costo_mxn, sic_usd:r.sic_usd }))
+  };
+}
+
+async function savePositionsToDB(portfolioId, usd, mxn) {
+  await Promise.all([
+    sb.from('posiciones_usd').delete().eq('portfolio_id', portfolioId),
+    sb.from('posiciones_mxn').delete().eq('portfolio_id', portfolioId)
+  ]);
+  const ops = [];
+  if (usd.length) ops.push(sb.from('posiciones_usd').insert(
+    usd.map((p,i) => ({ portfolio_id:portfolioId, ticker:p.t, nombre:p.n, shares:p.s, precio_entrada:p.pE, monto:p.mnt||p.s*p.pE, sort_order:i }))
+  ));
+  if (mxn.length) ops.push(sb.from('posiciones_mxn').insert(
+    mxn.map((p,i) => ({ portfolio_id:portfolioId, ticker:p.t, nombre:p.n, shares:p.s, precio_entrada:p.pE, costo_mxn:p.cM||p.s*p.pE, sic_usd:p.sic_usd||false, sort_order:i }))
+  ));
+  await Promise.all(ops);
+}
+
+/* ── Auth state listener ── */
+sb.auth.onAuthStateChange(async (event, session) => {
+  if (session?.user) {
+    currentUser = session.user;
+    showDashboard(currentUser);
+    try {
+      currentPortfolioId = await getOrCreatePortfolio(currentUser.id);
+      if (currentPortfolioId) {
+        const { usd, mxn } = await loadPositionsFromDB(currentPortfolioId);
+        if (usd.length || mxn.length) {
+          CONFIG.posiciones_usd = usd;
+          CONFIG.posiciones_mxn = mxn;
+          SIC_TICKERS = new Set(CONFIG.posiciones_mxn.filter(p => p.sic_usd).map(p => p.t));
+          Store.set(POS_KEY, { usd, mxn });
+        }
+      }
+    } catch(e) { console.warn('[Supabase] Error cargando portafolio:', e); }
+    init(true);
+  } else {
+    showLoginScreen();
+  }
+});
 
 /* ═══════════════════════════════════════════════
    GITHUB SYNC — sincroniza tickers.json via API
@@ -1784,8 +1966,8 @@ function showToast(msg, isError = false) {
 
 /* ── fin GitHub Sync ── */
 
-loadPositions();
-init();
+loadPositions(); // Pre-carga localStorage en CONFIG mientras auth carga
+// init() es disparado por onAuthStateChange después de verificar sesión
 </script>
 </body>
 </html>
