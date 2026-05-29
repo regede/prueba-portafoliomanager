@@ -279,11 +279,17 @@ tbody tr:hover:not(.row-group):not(.row-total):not(.row-sub) td { background: va
 }
 .ep-header h2 { font-size: 0.9rem; font-weight: 600; }
 .ep-header-actions { display: flex; gap: 8px; align-items: center; }
-.ep-tabs { display: flex; border-bottom: 1px solid var(--border); padding: 0 16px; }
+.ep-tabs { display: flex; border-bottom: 1px solid var(--border); padding: 0 16px; overflow-x: auto; }
 .ep-tab {
-  padding: 8px 16px; font-size: 12px; font-weight: 500; color: var(--muted);
-  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  padding: 8px 12px; font-size: 12px; font-weight: 500; color: var(--muted);
+  border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; flex-shrink: 0;
   cursor: pointer; transition: color .15s; user-select: none;
+}
+.ep-scroll { overflow-x: auto; }
+.ep-select {
+  width: 100%; padding: 4px 4px; background: var(--bg);
+  border: 1px solid var(--border2); border-radius: 5px; color: var(--text);
+  font-size: 11.5px; font-family: var(--font); outline: none; cursor: pointer;
 }
 .ep-tab:hover { color: var(--text); }
 .ep-tab.active { color: var(--text); border-bottom-color: var(--accent); }
@@ -561,13 +567,19 @@ tbody tr:hover:not(.row-group):not(.row-total):not(.row-sub) td { background: va
     </div>
     <div class="ep-tabs">
       <div class="ep-tab active" onclick="switchETab('usd')">📈 USD</div>
-      <div class="ep-tab"       onclick="switchETab('mxn')">💱 MXN / SIC</div>
-      <div class="ep-tab"       onclick="switchETab('sync')">🔗 GitHub Sync</div>
+      <div class="ep-tab"       onclick="switchETab('mxn')">💱 MXN/SIC</div>
+      <div class="ep-tab"       onclick="switchETab('compras')">🛒 Compras</div>
+      <div class="ep-tab"       onclick="switchETab('cerradas')">📁 Cerradas</div>
+      <div class="ep-tab"       onclick="switchETab('divs')">💰 Divs</div>
+      <div class="ep-tab"       onclick="switchETab('sync')">🔗 Sync</div>
     </div>
     <div class="ep-body">
       <div id="ep-usd"></div>
-      <div id="ep-mxn"  style="display:none"></div>
-      <div id="ep-sync" style="display:none"></div>
+      <div id="ep-mxn"      style="display:none"></div>
+      <div id="ep-compras"  style="display:none"></div>
+      <div id="ep-cerradas" style="display:none"></div>
+      <div id="ep-divs"     style="display:none"></div>
+      <div id="ep-sync"     style="display:none"></div>
     </div>
   </div>
 
@@ -1615,9 +1627,14 @@ function loadPositions() {
   }
 }
 
+const ETABS = ['usd','mxn','compras','cerradas','divs','sync'];
+
 function openEditor() {
   renderEPane('usd');
   renderEPane('mxn');
+  renderComprasPane();
+  renderCerradasPane();
+  renderDivsPane();
   renderSyncPane();
   document.getElementById('editor-panel').classList.add('open');
   document.getElementById('editor-backdrop').classList.add('open');
@@ -1630,10 +1647,9 @@ function closeEditor() {
 
 function switchETab(tab) {
   document.querySelectorAll('.ep-tab').forEach((t, i) =>
-    t.classList.toggle('active', ['usd','mxn','sync'][i] === tab));
-  document.getElementById('ep-usd').style.display  = tab === 'usd'  ? '' : 'none';
-  document.getElementById('ep-mxn').style.display  = tab === 'mxn'  ? '' : 'none';
-  document.getElementById('ep-sync').style.display = tab === 'sync' ? '' : 'none';
+    t.classList.toggle('active', ETABS[i] === tab));
+  ETABS.forEach(id =>
+    document.getElementById('ep-' + id).style.display = id === tab ? '' : 'none');
 }
 
 function renderEPane(which) {
@@ -1709,12 +1725,173 @@ function collectERows(which) {
   });
 }
 
+/* ── Helpers de selects ── */
+const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+function mesSelect(val) { return `<select class="ep-select" data-f="mes">${MESES.map(m=>`<option ${m===val?'selected':''}>${m}</option>`).join('')}</select>`; }
+function curSelect(val) { return `<select class="ep-select" data-f="cur"><option ${val==='USD'?'selected':''}>USD</option><option ${val==='MXN'?'selected':''}>MXN</option></select>`; }
+function selOpts(arr, val) { return arr.map(o => { const v=Array.isArray(o)?o[0]:o, l=Array.isArray(o)?o[1]:o; return `<option value="${v}" ${v===val?'selected':''}>${l}</option>`; }).join(''); }
+function epVal(tr) { return f => { const el=tr.querySelector(`[data-f="${f}"]`); if(!el) return undefined; if(el.type==='number') return parseFloat(el.value)||0; return (el.value||'').trim(); }; }
+
+/* ── Editor: Compras ── */
+function renderComprasPane() {
+  const rows = [
+    ...(CONFIG.compras_usd||[]).map(r => ({...r, cur:'USD', tc: r.tc ?? (CONFIG.tc_compras?.[r.t] ?? '')})),
+    ...(CONFIG.compras_mxn||[]).map(r => ({...r, cur:'MXN', tc:''}))
+  ];
+  document.getElementById('ep-compras').innerHTML = `
+    <div class="ep-scroll"><table class="ep-table" style="min-width:580px">
+      <thead><tr>
+        <th style="width:52px">Ticker</th><th style="min-width:88px">Nombre</th>
+        <th style="width:42px">Año</th><th style="width:62px">Mes</th>
+        <th style="width:46px">Tít.</th><th style="width:60px">P. Compra</th>
+        <th style="width:54px">T/C</th><th style="width:58px">Moneda</th>
+        <th style="width:20px"></th>
+      </tr></thead><tbody id="ep-compras-body"></tbody>
+    </table></div>
+    <button class="ep-add" onclick="addCompraRow()">+ Agregar compra</button>
+    <div class="ep-notice">Una fila por compra. El <strong>T/C</strong> (solo USD) alimenta “Efecto T/C”; se pondera por ticker automáticamente al guardar.</div>`;
+  const tb = document.getElementById('ep-compras-body');
+  rows.forEach(r => tb.appendChild(makeCompraRow(r)));
+}
+function makeCompraRow(r={}) {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input class="ep-input" style="width:48px;text-transform:uppercase" value="${r.t||''}" data-f="t"></td>
+    <td><input class="ep-input" value="${r.n||''}" data-f="n"></td>
+    <td><input class="ep-input" type="number" min="0" max="99" value="${r.año??''}" data-f="año"></td>
+    <td>${mesSelect(r.mes||'Ene')}</td>
+    <td><input class="ep-input" type="number" step="any" value="${r.s??0}" data-f="s"></td>
+    <td><input class="ep-input" type="number" step="any" value="${r.pC??0}" data-f="pC"></td>
+    <td><input class="ep-input" type="number" step="any" value="${r.tc??''}" data-f="tc"></td>
+    <td>${curSelect(r.cur||'USD')}</td>
+    <td><button class="ep-del" onclick="this.closest('tr').remove()">✕</button></td>`;
+  return tr;
+}
+function addCompraRow() { const tb=document.getElementById('ep-compras-body'); const row=makeCompraRow({cur:'USD',mes:'Ene'}); tb.appendChild(row); row.querySelector('.ep-input').focus(); }
+function collectCompras() {
+  const usd=[], mxn=[];
+  [...document.querySelectorAll('#ep-compras-body tr')].forEach(tr => {
+    const v = epVal(tr);
+    const t = (v('t')||'').toUpperCase(); if(!t) return;
+    const cur = v('cur')||'USD';
+    const base = { t, n:v('n'), año:v('año'), mes:v('mes'), s:v('s'), pC:v('pC'), cur };
+    if (cur==='USD') { base.tc = v('tc')||0; usd.push(base); } else mxn.push(base);
+  });
+  return { usd, mxn };
+}
+function deriveTC(comprasUsd) {
+  const monto={}, wsum={};
+  comprasUsd.forEach(c => { const m=c.s*c.pC; monto[c.t]=(monto[c.t]||0)+m; wsum[c.t]=(wsum[c.t]||0)+m*(c.tc||0); });
+  const tc={}; Object.keys(monto).forEach(t => { tc[t]= monto[t] ? wsum[t]/monto[t] : 0; });
+  return { tc_compras:tc, tc_compras_montos:monto };
+}
+
+/* ── Editor: Cerradas ── */
+function renderCerradasPane() {
+  document.getElementById('ep-cerradas').innerHTML = `
+    <div class="ep-scroll"><table class="ep-table" style="min-width:700px">
+      <thead><tr>
+        <th style="width:52px">Ticker</th><th style="min-width:88px">Nombre</th><th style="width:56px">Mon.</th>
+        <th style="width:62px">F. Compra</th><th style="width:62px">P.C. Prom</th>
+        <th style="width:58px">F. Venta</th><th style="width:62px">P. Venta</th>
+        <th style="width:46px">Tít.</th><th style="width:66px">Costo</th><th style="width:72px">Valor Venta</th>
+        <th style="width:46px">Días</th><th style="width:20px"></th>
+      </tr></thead><tbody id="ep-cerradas-body"></tbody>
+    </table></div>
+    <button class="ep-add" onclick="addCerradaRow()">+ Agregar cerrada</button>
+    <div class="ep-notice">P&amp;L y rendimiento se calculan automáticamente desde Costo y Valor de Venta.</div>`;
+  const tb = document.getElementById('ep-cerradas-body');
+  (CONFIG.cerradas||[]).forEach(r => tb.appendChild(makeCerradaRow(r)));
+}
+function makeCerradaRow(r={}) {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input class="ep-input" style="width:48px;text-transform:uppercase" value="${r.t||''}" data-f="t"></td>
+    <td><input class="ep-input" value="${r.n||''}" data-f="n"></td>
+    <td>${curSelect(r.cur||'USD')}</td>
+    <td><input class="ep-input" value="${r.fCompras||''}" data-f="fCompras" placeholder="Ene 23"></td>
+    <td><input class="ep-input" type="number" step="any" value="${r.pCProm??0}" data-f="pCProm"></td>
+    <td><input class="ep-input" value="${r.fVenta||''}" data-f="fVenta" placeholder="Jun 23"></td>
+    <td><input class="ep-input" type="number" step="any" value="${r.pV??0}" data-f="pV"></td>
+    <td><input class="ep-input" type="number" step="any" value="${r.s??0}" data-f="s"></td>
+    <td><input class="ep-input" type="number" step="any" value="${r.costo??0}" data-f="costo"></td>
+    <td><input class="ep-input" type="number" step="any" value="${r.valorVenta??0}" data-f="valorVenta"></td>
+    <td><input class="ep-input" type="number" step="any" value="${r.dias??0}" data-f="dias"></td>
+    <td><button class="ep-del" onclick="this.closest('tr').remove()">✕</button></td>`;
+  return tr;
+}
+function addCerradaRow() { const tb=document.getElementById('ep-cerradas-body'); const row=makeCerradaRow({cur:'USD'}); tb.appendChild(row); row.querySelector('.ep-input').focus(); }
+function collectCerradas() {
+  return [...document.querySelectorAll('#ep-cerradas-body tr')].flatMap(tr => {
+    const v = epVal(tr);
+    const t = (v('t')||'').toUpperCase(); if(!t) return [];
+    const costo=v('costo'), valorVenta=v('valorVenta');
+    const pl = valorVenta - costo, ret = costo ? pl/costo*100 : 0;
+    return [{ t, n:v('n'), cur:v('cur')||'USD', fCompras:v('fCompras'), pCProm:v('pCProm'),
+      fVenta:v('fVenta'), pV:v('pV'), s:v('s'), costo, valorVenta, pl, ret, dias:v('dias') }];
+  });
+}
+
+/* ── Editor: Dividendos ── */
+const DIV_ESTADOS = ['Activa','Activa (SIC)','Cerrada'];
+const DIV_NOTAS   = [['','—'],['low','monto negligible'],['proximo','próximo pago']];
+function renderDivsPane() {
+  document.getElementById('ep-divs').innerHTML = `
+    <div class="ep-scroll"><table class="ep-table" style="min-width:640px">
+      <thead><tr>
+        <th style="width:52px">Ticker</th><th style="min-width:88px">Nombre</th>
+        <th style="width:96px">Estado</th><th style="min-width:88px">Período</th>
+        <th style="width:46px">Tít.</th><th style="width:46px">Pagos</th>
+        <th style="width:62px">Total</th><th style="width:56px">Mon.</th><th style="width:96px">Nota</th>
+        <th style="width:20px"></th>
+      </tr></thead><tbody id="ep-divs-body"></tbody>
+    </table></div>
+    <button class="ep-add" onclick="addDivRow()">+ Agregar dividendo</button>`;
+  const tb = document.getElementById('ep-divs-body');
+  (CONFIG.divs||[]).forEach(r => tb.appendChild(makeDivRow(r)));
+}
+function makeDivRow(r={}) {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input class="ep-input" style="width:48px;text-transform:uppercase" value="${r.t||''}" data-f="t"></td>
+    <td><input class="ep-input" value="${r.n||''}" data-f="n"></td>
+    <td><select class="ep-select" data-f="estado">${selOpts(DIV_ESTADOS, r.estado||'Activa')}</select></td>
+    <td><input class="ep-input" value="${r.periodo||''}" data-f="periodo" placeholder="Ene 24 – hoy"></td>
+    <td><input class="ep-input" type="number" step="any" value="${r.titulos??0}" data-f="titulos"></td>
+    <td><input class="ep-input" type="number" step="any" value="${r.pagos??0}" data-f="pagos"></td>
+    <td><input class="ep-input" type="number" step="any" value="${r.total??0}" data-f="total"></td>
+    <td>${curSelect(r.cur||'USD')}</td>
+    <td><select class="ep-select" data-f="nota">${selOpts(DIV_NOTAS, r.nota||'')}</select></td>
+    <td><button class="ep-del" onclick="this.closest('tr').remove()">✕</button></td>`;
+  return tr;
+}
+function addDivRow() { const tb=document.getElementById('ep-divs-body'); const row=makeDivRow({cur:'USD',estado:'Activa'}); tb.appendChild(row); row.querySelector('.ep-input').focus(); }
+function collectDivs() {
+  return [...document.querySelectorAll('#ep-divs-body tr')].flatMap(tr => {
+    const v = epVal(tr);
+    const t = (v('t')||'').toUpperCase(); if(!t) return [];
+    return [{ t, n:v('n'), estado:v('estado')||'Activa', periodo:v('periodo'),
+      titulos:v('titulos'), pagos:v('pagos'), total:v('total'), cur:v('cur')||'USD', nota:v('nota')||'' }];
+  });
+}
+
 async function savePositions() {
   const usd = collectERows('usd');
   const mxn = collectERows('mxn');
+  const compras = collectCompras();
+  const { tc_compras, tc_compras_montos } = deriveTC(compras.usd);
+  const cerradas = collectCerradas();
+  const divs = collectDivs();
+
   Store.set(POS_KEY, { usd, mxn });
   CONFIG.posiciones_usd = usd;
   CONFIG.posiciones_mxn = mxn;
+  CONFIG.compras_usd = compras.usd;
+  CONFIG.compras_mxn = compras.mxn;
+  CONFIG.tc_compras = tc_compras;
+  CONFIG.tc_compras_montos = tc_compras_montos;
+  CONFIG.cerradas = cerradas;
+  CONFIG.divs = divs;
   SIC_TICKERS = new Set(CONFIG.posiciones_mxn.filter(p => p.sic_usd).map(p => p.t));
   closeEditor();
 
